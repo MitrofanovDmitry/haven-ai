@@ -144,6 +144,8 @@ def submit_job(command, savedir):
     path_err = os.path.join(savedir, "err.txt")
     lines += "#SBATCH --output=%s \n" % path_log
     lines += "#SBATCH --error=%s \n" % path_err
+    path_code = os.path.join(savedir, "code")
+    lines += "#SBATCH --chdir=%s \n" % path_code
     
     lines += command
 
@@ -324,14 +326,28 @@ if __name__ == "__main__":
 
     elif option == 'reset':
       # ressset each experiment (delete the checkpoint and reset)
-      command = 'python test_slurm.py -ei %s' % exp_id
+      pr = hu.Parallel()
       for exp_dict in exp_list:
         exp_id = hu.hash_dict(exp_dict)
-        savedir = os.path.join(savedir_base, exp_id)
-        hc.delete_and_backup_experiment(savedir)
+        # check for job status before reset and kill the job if submitted
+        job_info = get_job(exp_id)
+        if job_info["JobState"] == "RUNNING" or job_info["JobState"] == "PENDING":
+          kill_job(job_info["JobState"])
+
+        # reset folder
+        save_exp_folder(exp_dict, savedir_base, True)
+
+        # copy code to savedir_base/code
+        workdir = os.path.join(savedir_base, exp_id, 'code')
+        currentdir = os.path.join(hu.subprocess_call("pwd"))
+        hu.copy_code(currentdir, workdir)
+
         command = 'python test_slurm.py -ei %s' % exp_id
-        # todo: check job running? -- yes, always check job status before submitting
-        submit_job(command, savedir_base)
+        savedir = os.path.join(savedir_base, exp_id)
+        pr.add(submit_job, command, savedir)
+
+      pr.run()
+      pr.close()
 
     elif option == 'status':
       # get job status of each exp
