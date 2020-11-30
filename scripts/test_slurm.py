@@ -352,10 +352,23 @@ if __name__ == "__main__":
     elif option == 'status':
       # get job status of each exp
       job_list = []
-      for exp_dict in exp_list:
-        exp_id = hu.hash_dict(exp_dict)
-        job_list.append(get_job(exp_id)) 
-      hu.save_json('/home/xhdeng/shared/results/test_slurm/example/job_info.json', job_list)
+      for i in range(1, len(exp_list) + 1):
+        exp_id = hu.hash_dict(exp_list[i-1])
+        savedir = os.path.join(savedir_base, exp_id)
+        job_info = get_job(exp_id)
+        output_string = """Experiment %d/%d 
+        ==================================================
+        exp_id: %s
+        job_id: %s
+        job_state: %s
+        savedir: %s
+        exp_dict
+        --------------------------------------------------
+        %s
+        """ % (i, len(exp_list) + 1, exp_list[i-1], 
+        job_info["JobId"], job_info["JobState"], savedir, job_info)
+
+        print(output_string) 
 
     elif option == 'kill':
       # make sure all jobs for the exps are dead
