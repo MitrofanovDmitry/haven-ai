@@ -101,7 +101,6 @@ def get_job_id(exp_id, savedir_base):
   savedir = os.path.join(savedir_base, exp_id)
   file_name = os.path.join(savedir, "job_dict.json")
   if not os.path.exists(file_name):
-    print("no job id")
     return -1
   job_dict = hu.load_json(file_name)
   return job_dict["job_id"]
@@ -144,8 +143,8 @@ def submit_job(command, savedir):
     path_err = os.path.join(savedir, "err.txt")
     lines += "#SBATCH --output=%s \n" % path_log
     lines += "#SBATCH --error=%s \n" % path_err
-    path_code = os.path.join(savedir, "code")
-    lines += "#SBATCH --chdir=%s \n" % path_code
+    # path_code = os.path.join(savedir, "code")
+    # lines += "#SBATCH --chdir=%s \n" % path_code
     
     lines += command
 
@@ -188,7 +187,7 @@ def save_exp_folder(exp_dict, savedir_base, reset):
     hu.save_json(os.path.join(savedir, "exp_dict.json"), exp_dict)  # save the experiment config as json
 
 
-import haven_wizard as hw
+from haven import haven_wizard as hw
 # 1. define the training and validation function
 def trainval(exp_dict, savedir, args):
     """
@@ -313,9 +312,9 @@ if __name__ == "__main__":
             continue
         
         # copy code to savedir_base/code
-        workdir = os.path.join(savedir_base, exp_id, 'code')
-        currentdir = os.path.join(hu.subprocess_call("pwd"))
-        hu.copy_code(currentdir, workdir)
+        # workdir = os.path.join(savedir_base, exp_id, 'code')
+        # currentdir = os.path.join(hu.subprocess_call("pwd"))
+        # hu.copy_code(currentdir, workdir)
         
         command = 'python test_slurm.py -ei %s' % exp_id
         savedir = os.path.join(savedir_base, exp_id)
@@ -330,9 +329,11 @@ if __name__ == "__main__":
       for exp_dict in exp_list:
         exp_id = hu.hash_dict(exp_dict)
         # check for job status before reset and kill the job if submitted
-        job_info = get_job(exp_id)
-        if job_info["JobState"] == "RUNNING" or job_info["JobState"] == "PENDING":
-          kill_job(job_info["JobState"])
+        job_id = get_job_id(exp_id, savedir_base)
+        if job_id != -1:
+          job_info = get_job(job_id)
+          if job_info["JobState"] == "RUNNING" or job_info["JobState"] == "PENDING":
+            kill_job(job_info["JobState"])
 
         # reset folder
         save_exp_folder(exp_dict, savedir_base, True)
@@ -355,20 +356,21 @@ if __name__ == "__main__":
       for i in range(1, len(exp_list) + 1):
         exp_id = hu.hash_dict(exp_list[i-1])
         savedir = os.path.join(savedir_base, exp_id)
-        job_info = get_job(exp_id)
-        output_string = """Experiment %d/%d 
-        ==================================================
-        exp_id: %s
-        job_id: %s
-        job_state: %s
-        savedir: %s
-        exp_dict
-        --------------------------------------------------
-        %s
-        """ % (i, len(exp_list) + 1, exp_list[i-1], 
-        job_info["JobId"], job_info["JobState"], savedir, job_info)
+        job_id = get_job_id(exp_id, savedir_base)
+        if job_id != -1:
+          job_info = get_job(job_id)
+          output_string = ("Experiment %d/%d\n "
+          "==================================================\n"
+          "exp_id: %s\n"
+          "job_id: %s\n"
+          "job_state: %s\n"
+          "savedir: %s\n"
+          "exp_dict\n"
+          "--------------------------------------------------\n"
+          "%s\n") % (i, len(exp_list), exp_list[i-1], 
+          job_info["JobId"], job_info["JobState"], savedir, job_info)
 
-        print(output_string) 
+          print(output_string) 
 
     elif option == 'kill':
       # make sure all jobs for the exps are dead
