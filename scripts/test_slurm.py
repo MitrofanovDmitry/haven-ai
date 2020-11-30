@@ -49,7 +49,6 @@ def get_job(job_id):
           time.sleep(1)
           continue
         else:
-          print(e)
           job_info = {'JobState': 'Invalid Job Id'}
       break
     return job_info
@@ -72,8 +71,6 @@ def get_jobs(user_name):
           print("scontrol time out and retry now")
           time.sleep(1)
           continue
-        else:
-          print(e)
       break
     return result
 
@@ -91,8 +88,6 @@ def kill_job(job_id):
           print("scancel time out and retry now")
           time.sleep(1)
           continue
-        else:
-          print(e)
       break
     return
 import argparse
@@ -160,8 +155,6 @@ def submit_job(command, savedir):
           print("slurm time out and retry now")
           time.sleep(1)
           continue
-        else:
-          print(e)
       break
 
     # save the command and job id in job_dict.json
