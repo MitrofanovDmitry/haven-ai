@@ -9,7 +9,7 @@ sys.path.insert(0, path)
 from haven import haven_chk as hc
 # from haven import haven_results as hr
 from haven import haven_utils as hu
-from haven import haven_examples as he
+from haven import haven_examples as he 
 import torch
 import torchvision
 import tqdm
@@ -37,7 +37,7 @@ except:
 def get_job(job_id):
     """Get job information."""
     command = "scontrol show job %s" % job_id
-    job_info = ''
+    job_info = {}
     while True:
       try:
         job_info = hu.subprocess_call(command)
@@ -50,6 +50,7 @@ def get_job(job_id):
           continue
         else:
           print(e)
+          job_info = {'JobState': 'Invalid Job Id'}
       break
     return job_info
     
@@ -110,8 +111,7 @@ def get_existing_slurm_job_commands(exp_list, savedir_base):
     existing_job_commands = []
     for exp_dict in exp_list:
         exp_id = hu.hash_dict(exp_dict)
-        savedir = os.path.join(savedir_base, exp_id)
-        file_name = os.path.join(savedir, "job_dict.json")
+        file_name = os.path.join(savedir_base, exp_id, "job_dict.json")
         if not os.path.exists(file_name):
             continue
         job_dict = hu.load_json(file_name)
@@ -175,6 +175,18 @@ def submit_job(command, savedir):
 
     return job_id
 
+
+def save_exp_folder(exp_dict, savedir_base, reset):
+    exp_id = hu.hash_dict(exp_dict)  # generate a unique id for the experiment
+    savedir = os.path.join(savedir_base, exp_id)  # generate a route with the experiment id
+    if reset:
+        hc.delete_and_backup_experiment(savedir)
+
+    os.makedirs(savedir, exist_ok=True)  # create the route to keep the experiment result
+    hu.save_json(os.path.join(savedir, "exp_dict.json"), exp_dict)  # save the experiment config as json
+
+
+import haven_wizard as hw
 # 1. define the training and validation function
 def trainval(exp_dict, savedir, args):
     """
@@ -282,16 +294,33 @@ if __name__ == "__main__":
     option = input(prompt)
     if option == 'run':
       # only run if job has failed or never ran before
+      pr = hu.Parallel()
       for exp_dict in exp_list:
         exp_id = hu.hash_dict(exp_dict)
-        # todo: check directory exist in get_job_id?
-        # todo: create new folder in which step?
-        # todo: not launched parallel?
+
+        # save exp folder
+        save_exp_folder(exp_dict, savedir_base, False)
+
+        # check job status
         job_id = get_job_id(exp_id, savedir_base)
-        if job_id == -1:
-          continue
+        if job_id != -1:
+          job_info = get_job(job_id)
+          # job_info == 'Job not running'
+          if job_info["JobState"] == "RUNNING" or job_info["JobState"] == "PENDING":
+            # job is running, no need to submit again
+            continue
+        
+        # copy code to savedir_base/code
+        workdir = os.path.join(savedir_base, exp_id, 'code')
+        currentdir = os.path.join(hu.subprocess_call("pwd"))
+        hu.copy_code(currentdir, workdir)
+        
         command = 'python test_slurm.py -ei %s' % exp_id
-        submit_job(command, savedir_base)
+        savedir = os.path.join(savedir_base, exp_id)
+        pr.add(submit_job, command, savedir)
+
+      pr.run()
+      pr.close()
 
     elif option == 'reset':
       # ressset each experiment (delete the checkpoint and reset)
@@ -301,7 +330,7 @@ if __name__ == "__main__":
         savedir = os.path.join(savedir_base, exp_id)
         hc.delete_and_backup_experiment(savedir)
         command = 'python test_slurm.py -ei %s' % exp_id
-        # todo: check job running?
+        # todo: check job running? -- yes, always check job status before submitting
         submit_job(command, savedir_base)
 
     elif option == 'status':
