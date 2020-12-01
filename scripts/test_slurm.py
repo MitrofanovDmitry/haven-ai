@@ -4,12 +4,14 @@ path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.insert(0, path)
 
 # from haven.haven_jobs import slurm_manager as sm
-
+import getpass
   
 from haven import haven_chk as hc
 # from haven import haven_results as hr
 from haven import haven_utils as hu
 from haven import haven_examples as he 
+
+from haven import haven_wizard as hw
 import torch
 import torchvision
 import tqdm
@@ -23,10 +25,8 @@ import numpy as np
 from torch.utils.data import RandomSampler, DataLoader
 print()
 
-try:
-  import job_configs
-except:
-  pass
+import job_configs
+
 # from haven_utils import file_utils
 
 
@@ -180,7 +180,6 @@ def save_exp_folder(exp_dict, savedir_base, reset):
     hu.save_json(os.path.join(savedir, "exp_dict.json"), exp_dict)  # save the experiment config as json
 
 
-from haven import haven_wizard as hw
 # 1. define the training and validation function
 def trainval(exp_dict, savedir, args):
     """
@@ -261,7 +260,8 @@ if __name__ == "__main__":
   # pr.close()
 
   # # task 6 with menu - run mnist experiments on these 5 learning rates
-  savedir_base = "/home/xhdeng/shared/results/test_slurm/task6"
+  username = getpass.getuser()
+  savedir_base = f"/home/{username}/shared/results/{username}/test_slurm/task6"
   import argparse
 
   parser = argparse.ArgumentParser()
@@ -288,7 +288,7 @@ if __name__ == "__main__":
     option = input(prompt)
     if option == 'run':
       # only run if job has failed or never ran before
-      pr = hu.Parallel()
+      # pr = hu.Parallel()
       for exp_dict in exp_list:
         exp_id = hu.hash_dict(exp_dict)
 
@@ -302,19 +302,17 @@ if __name__ == "__main__":
           # job_info == 'Job not running'
           if job_info["JobState"] == "RUNNING" or job_info["JobState"] == "PENDING":
             # job is running, no need to submit again
+            print('job is %s' % job_info["JobState"])
             continue
-        
-        # copy code to savedir_base/code
-        # workdir = os.path.join(savedir_base, exp_id, 'code')
-        # currentdir = os.path.join(hu.subprocess_call("pwd"))
-        # hu.copy_code(currentdir, workdir)
         
         command = 'python test_slurm.py -ei %s' % exp_id
         savedir = os.path.join(savedir_base, exp_id)
-        pr.add(submit_job, command, savedir)
+        # pr.add(submit_job, command, savedir)
+        job_id = submit_job(command, savedir)
+        print('submitted %s' % job_id)
 
-      pr.run()
-      pr.close()
+      # pr.run()
+      # pr.close()
 
     elif option == 'reset':
       # ressset each experiment (delete the checkpoint and reset)
@@ -377,7 +375,7 @@ if __name__ == "__main__":
   else:
     for exp_dict in exp_list:
       exp_id = hu.hash_dict(exp_dict)
-      savedir = '/home/xhdeng/shared/results/test_slurm/task6/%s' % exp_id
+      savedir = f'/home/{username}/shared/results/{username}/test_slurm/task6/%s' % exp_id
       if exp_id is not None and exp_id == args.exp_id:
         trainval(exp_dict, savedir, args={})
    
